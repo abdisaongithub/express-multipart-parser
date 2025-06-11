@@ -1,6 +1,6 @@
 {
   "name": "express-multipart-parser",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "An express middleware that parses multipart/form-data contents to req.body and req.files (for files).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
