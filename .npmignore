@@ -1,0 +1,8 @@
+src/
+test/
+example.ts
+parser_middleware.ts
+tsconfig.json
+.gitignore
+.github/
+node_modules/

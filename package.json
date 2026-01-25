@@ -1,6 +1,17 @@
 {
   "name": "express-multipart-parser",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "keywords": [
+    "express",
+    "middleware",
+    "multipart",
+    "form-data",
+    "upload",
+    "file",
+    "parser",
+    "form",
+    "stream"
+  ],
   "description": "An express middleware that parses multipart/form-data contents to req.body and req.files (for files).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,7 +24,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/abdisaongithub/express-multipart-parser.git"
+    "url": "git+https://github.com/abdisaongithub/express-multipart-parser.git"
   },
   "author": "Abdisa Tsegaye",
   "license": "MIT",

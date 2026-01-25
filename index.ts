@@ -117,19 +117,40 @@ export class FormDataParser extends EventEmitter {
                         buffer = buffer.slice(boundaryIndex + boundary.length + 2); // skip boundary + CRLF
 
                         if (processingFile) {
+                            // We found the closing boundary for the current file
+                            // Write the final part (remove trailing \r\n if present)
+                            const endPart = part.length >= 2 ? part.slice(0, part.length - 2) : part;
+                            processingFile.stream.write(endPart);
+                            processingFile.size += endPart.length;
+                            
+                            if (processingFile.size > this.maxFileSize) {
+                                cleanUpFile(processingFile);
+                                const err = new Error('File size limit exceeded');
+                                this.emit('error', err);
+                                processingFile = null;
+                                return next(err);
+                            }
+
                             handleFileFinish();
+                            continue;
                         }
 
                         if (part.length === 0) continue;
 
                         const headerEnd = part.indexOf('\r\n\r\n');
                         if (headerEnd === -1) {
-                            // incomplete headers - wait for more data
-                            break;
+                            // incomplete headers - wait for more data... 
+                            // BUT wait, we found a boundary AFTER this.
+                            // So this IS a complete part, but it has no header separator.
+                            // This implies malformed data or just not a file part we understand.
+                            // Or maybe it's preamble.
+                            continue;
                         }
 
                         const rawHeaders = part.slice(0, headerEnd).toString('utf-8');
-                        const body = part.slice(headerEnd + 4);
+                        // The body is everything after headers until the end of `part`.
+                        // Since `part` ends at a boundary, we must strip the trailing \r\n (CRLF) that precedes the boundary.
+                        const body = part.slice(headerEnd + 4, part.length >= 2 ? part.length - 2 : part.length);
 
                         const headers = parseHeaders(rawHeaders);
                         const contentDisposition = headers['content-disposition'];
@@ -164,13 +185,21 @@ export class FormDataParser extends EventEmitter {
                             processingFile.size += body.length;
                             if (processingFile.size > this.maxFileSize) {
                                 cleanUpFile(processingFile);
-                                this.emit('error', new Error('File size limit exceeded'));
+                                const err = new Error('File size limit exceeded');
+                                this.emit('error', err);
                                 processingFile = null;
-                                return;
+                                return next(err);
                             }
+                            
+                            // Since `part` is bounded, the file is finished.
+                            handleFileFinish();
+
                         } else {
                             // text field
-                            const value = body.toString('utf-8').replace(/\r?\n$/, '');
+                            const value = body.toString('utf-8'); // .replace(/\r?\n$/, ''); // Text fields also have \r\n before boundary, but we already stripped it via `body` slice
+                            // Actually, let's verify if `body` slice handles it correctly.
+                            // If `body` is sliced - 2, we removed the implicit CRLF.
+                            
                             if (fieldName.endsWith('[]')) {
                                 const key = fieldName.slice(0, -2);
                                 fields[key] = Array.isArray(fields[key]) ? [...(fields[key] as string[]), value] : [value];
@@ -187,9 +216,10 @@ export class FormDataParser extends EventEmitter {
 
                         if (processingFile.size > this.maxFileSize) {
                             cleanUpFile(processingFile);
-                            this.emit('error', new Error('File size limit exceeded'));
+                            const err = new Error('File size limit exceeded');
+                            this.emit('error', err);
                             processingFile = null;
-                            return;
+                            return next(err);
                         }
                         buffer = Buffer.alloc(0);
                     }
@@ -249,3 +279,19 @@ export const setupParser = (parser: FormDataParser) => {
         parser.union()
     ]
 }
+
+const defaultOptions: FormDataOptions = {
+    // uploadDir: os.tmpdir(), // Let class default handle it
+    maxFileSize: 20 * 1024 * 1024, // 20MB default for the pre-built middleware
+    autoClean: false,
+};
+
+// Create a default instance
+export const formDataParser = new FormDataParser(defaultOptions);
+
+// Combines both parsing and formatting into one middleware
+export const formDataMiddleware = [
+    formDataParser.parse(),
+    formDataParser.format(), // Use the class method instead of inline function
+    formDataParser.union()
+];
