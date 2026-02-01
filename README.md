@@ -1,6 +1,6 @@
 # express-multipart-parser
 
-A lightweight, robust, and easy-to-use Express middleware for parsing `multipart/form-data` requests. It handles both text fields and file uploads, parsing them into `req.body` and `req.files` respectively.
+A lightweight, robust, and easy-to-use Express middleware for parsing `multipart/form-data` requests. It handles both text fields and file uploads, parsing them into `req.body` and `req.files`.
 
 [![npm version](https://img.shields.io/npm/v/express-multipart-parser.svg)](https://www.npmjs.com/package/express-multipart-parser)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -11,9 +11,10 @@ A lightweight, robust, and easy-to-use Express middleware for parsing `multipart
 - 📁 **File Uploads**: Streams files directly to disk (configurable location).
 - 📝 **Text Fields**: Parses text fields into `req.body`.
 - 🗃️ **Array Support**: Automatically handles array fields (e.g., `items[]`).
-- 🧹 **Auto Cleanup**: Option to automatically delete uploaded files after request processing (great for temporary processing).
+- 🔗 **Union Mode**: Merges uploaded files into `req.body` for unified access (enabled by default).
+- 🧹 **Auto Cleanup**: Option to automatically delete uploaded files on error (configurable).
 - 🛡️ **Size Limits**: Configurable max file size limit.
-- 🧩 **Flexible API**: Use as a single middleware or compose your own.
+- 🧩 **Flexible API**: Use as a single middleware or compose your own chain.
 - 🦾 **TypeScript Support**: Written in TypeScript with full type definitions included.
 
 ## Installation
@@ -24,9 +25,9 @@ npm install express-multipart-parser
 
 ## Usage
 
-### Basic Usage
+### Quick Start
 
-The easiest way to use it is with the default `formDataMiddleware`. This will parse the request and populate `req.body` and `req.files`.
+The easiest way to use it is with the default `formDataMiddleware`. This will parse the request and populate `req.body` (with both fields and files) and `req.files` (files only).
 
 ```typescript
 import express from 'express';
@@ -34,14 +35,14 @@ import { formDataMiddleware } from 'express-multipart-parser';
 
 const app = express();
 
+// Apply middleware
 app.post('/upload', formDataMiddleware, (req, res) => {
-    console.log('Fields:', req.body);
-    console.log('Files:', req.files);
-    
-    // Example file access
-    if (req.files.avatar) {
-        console.log('Uploaded file path:', req.files.avatar.path);
-    }
+    // req.body contains text fields AND file objects (merged)
+    console.log('Username:', req.body.username);
+    console.log('Avatar File Info:', req.body.avatar); 
+
+    // req.files strictly contains only file objects
+    console.log('Avatar (from files):', req.files.avatar);
     
     res.json({ message: 'Upload successful' });
 });
@@ -51,11 +52,11 @@ app.listen(3000, () => console.log('Server running on port 3000'));
 
 ### Custom Configuration
 
-You can create a custom instance of `FormDataParser` to configure options like upload directory and size limits.
+You can create a custom instance of `FormDataParser` to configure options like upload directory and size limits, and then use `setupParser` to apply it.
 
 ```typescript
 import express from 'express';
-import { FormDataParser } from 'express-multipart-parser';
+import { FormDataParser, setupParser } from 'express-multipart-parser';
 import { join } from 'path';
 
 const app = express();
@@ -63,61 +64,57 @@ const app = express();
 const parser = new FormDataParser({
     uploadDir: join(__dirname, 'uploads'), // Default: os.tmpdir()
     maxFileSize: 5 * 1024 * 1024,          // Default: Infinity (5MB here)
-    autoClean: true                        // Default: false (Delete files after request ends? No, this option is for cleanup on error/custom logic)
+    autoClean: true                        // Default: false
 });
 
-// Use the setup helper to register the middleware chain
-import { setupParser } from 'express-multipart-parser';
+// Use setupParser to apply the standard middleware chain (Parser -> Format -> Union)
 app.post('/upload', setupParser(parser), (req, res) => {
-    // ...
+    // ... logic
 });
-
-// OR manually chain them:
-// app.post('/upload', parser.parse(), parser.format(), (req, res, next) => { ... });
 ```
 
-### Options
+### Modular Usage (Advanced)
+
+If you don't want the default behavior (e.g., you don't want files merged into `req.body`), you can chain the middleware methods manually.
+
+```typescript
+// Only parse and format (req.body = fields, req.files = files)
+app.post('/separate', parser.parse(), parser.format(), (req, res) => {
+    // req.body has fields
+    // req.files has files
+    // req.body DOES NOT contain files
+});
+
+// Only parse (raw data available in internal properties, usually you want format())
+app.post('/raw', parser.parse(), (req, res) => {
+    // Access internal storage if really needed
+});
+```
+
+## API Reference
+
+### `FormDataOptions`
 
 | Option | Type | Default | Description |
-|ion | Type | Default | Description |
 |---|---|---|---|
 | `uploadDir` | `string` | `os.tmpdir()` | Directory where uploaded files will be stored. |
 | `maxFileSize` | `number` | `Infinity` | Maximum allowed file size in bytes. Request fails if exceeded. |
-| `autoClean` | `boolean` | `false` | If `true`, files are automatically deleted if an error occurs during parsing. (Note: You usually want to handle success cleanup yourself or use a temp dir). |
+| `autoClean` | `boolean` | `false` | If `true`, files are automatically deleted if an error occurs during parsing. |
 
-### Request Objects
+### `FormDataParser` Methods
 
-#### `req.body`
-Contains text fields.
-```json
-{
-  "username": "john_doe",
-  "hobbies": ["coding", "reading"]
-}
-```
+- **`parse()`**: Main middleware that processes the multipart stream, handles file writing, and parses text fields.
+- **`format()`**: Middleware that exposes the parsed data on `req.body` and `req.files`.
+- **`union()`**: Middleware that merges `req.files` properties into `req.body`.
 
-#### `req.files`
-Contains file information. Keys match the form field names.
-```json
-{
-  "avatar": {
-    "path": "/path/to/upload/uuid.png",
-    "fileName": "profile.png",
-    "mimeType": "image/png",
-    "size": 12345
-  }
-}
-```
-If multiple files are uploaded with the same field name (e.g., `photos[]`), the value will be an array of file objects.
+## Events
 
-### Advanced: Events
-
-The `FormDataParser` class extends `EventEmitter`. You can listen to events directly if you instantiate it manually (though usually middleware handles this).
+The `FormDataParser` class extends `EventEmitter`. You can listen to events directly if you instantiate it manually.
 
 - `fileBegin`: Emitted when a file upload starts.
 - `file`: Emitted when a file upload is complete.
 - `field`: Emitted when a text field is parsed.
-- `error`: Emitted on error.
+- `error`: Emitted on error (e.g. file size exceeded).
 - `end`: Emitted when parsing is complete.
 
 ## License
