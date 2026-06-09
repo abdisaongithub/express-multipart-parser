@@ -3,7 +3,9 @@
 A lightweight, robust, and easy-to-use Express middleware for parsing `multipart/form-data` requests. It handles both text fields and file uploads, parsing them into `req.body` and `req.files`.
 
 [![npm version](https://img.shields.io/npm/v/express-multipart-parser.svg)](https://www.npmjs.com/package/express-multipart-parser)
+[![npm downloads](https://img.shields.io/npm/dm/express-multipart-parser.svg)](https://www.npmjs.com/package/express-multipart-parser)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Dependency Audit](https://github.com/abdisaongithub/express-multipart-parser/actions/workflows/dependency-audit.yml/badge.svg)](https://github.com/abdisaongithub/express-multipart-parser/actions/workflows/dependency-audit.yml)
 
 ## Features
 
@@ -120,3 +122,27 @@ The `FormDataParser` class extends `EventEmitter`. You can listen to events dire
 ## License
 
 MIT
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Run tests
+npm test
+
+# Watch mode
+npm run test:watch
+
+# Build
+npm run build
+```
+
+## CI/CD
+
+This project uses GitHub Actions for continuous integration:
+
+- **Pre-commit hook**: Runs tests and `npm audit --audit-level=high` before every commit (via Husky).
+- **Dependency Audit**: Runs on every PR and weekly (Monday 8am UTC). Creates a GitHub Issue if vulnerabilities are found.
+- **Publish**: Automatically publishes to npm on push to `main` when the version in `package.json` is bumped.

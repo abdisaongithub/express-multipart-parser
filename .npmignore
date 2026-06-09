@@ -1,8 +1,10 @@
 src/
 test/
 example.ts
-parser_middleware.ts
 tsconfig.json
 .gitignore
 .github/
+.husky/
+vitest.config.ts
+env.d.ts
 node_modules/
