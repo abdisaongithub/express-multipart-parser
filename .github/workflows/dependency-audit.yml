@@ -1,0 +1,134 @@
+name: Dependency Audit
+
+on:
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run npm audit
+        id: audit
+        continue-on-error: true
+        run: |
+          npm audit --json > audit-results.json 2>&1 || true
+          VULN_COUNT=$(node -p "try{const v=require('./audit-results.json');v.metadata?vulnerabilities?Object.values(v.vulnerabilities).reduce((a,b)=>a+b,0):0:0}catch(e){0}")
+          echo "count=$VULN_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Add PR comment with audit results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let auditData;
+            try {
+              auditData = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
+            } catch {
+              console.log('No audit results to report');
+              return;
+            }
+
+            const vulns = auditData.vulnerabilities || {};
+            const entries = Object.entries(vulns);
+            if (entries.length === 0) {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: '✅ **Dependency Audit**: No vulnerabilities found.'
+              });
+              return;
+            }
+
+            let body = '## 🚨 Dependency Vulnerability Report\n\n';
+            body += '| Package | Severity | Fix Available |\n';
+            body += '|---------|----------|--------------|\n';
+
+            for (const [pkg, info] of entries) {
+              const severity = info.severity || 'unknown';
+              const fixVia = info.fixAvailable ? (typeof info.fixAvailable === 'object' && info.fixAvailable.name ? info.fixAvailable.name : 'yes') : 'none';
+              body += `| ${pkg} | ${severity} | ${fixVia} |\n`;
+            }
+
+            body += '\nRun `npm audit` locally for details.';
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      - name: Create issue if vulnerabilities found (scheduled)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let auditData;
+            try {
+              auditData = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
+            } catch {
+              console.log('No audit results to report');
+              return;
+            }
+
+            const vulns = auditData.vulnerabilities || {};
+            const entries = Object.entries(vulns);
+            if (entries.length === 0) {
+              console.log('No vulnerabilities found');
+              return;
+            }
+
+            const {data: issues} = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'dependency-audit'
+            });
+
+            if (issues.length > 0) {
+              console.log('An open dependency-audit issue already exists, skipping');
+              return;
+            }
+
+            let body = '## Dependency Vulnerabilities Detected\n\n';
+            body += 'The weekly dependency audit found the following vulnerabilities:\n\n';
+            body += '| Package | Severity | Via | Fix Available |\n';
+            body += '|---------|----------|-----|--------------|\n';
+
+            for (const [pkg, info] of entries) {
+              const via = info.via ? info.via.map(v => typeof v === 'string' ? v : v.name).join(', ') : 'direct';
+              const severity = info.severity || 'unknown';
+              const fixVia = info.fixAvailable ? (typeof info.fixAvailable === 'object' && info.fixAvailable.name ? info.fixAvailable.name : 'yes') : 'none';
+              body += `| ${pkg} | ${severity} | ${via} | ${fixVia} |\n`;
+            }
+
+            body += '\nRun `npm audit` locally for full details.';
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Dependency vulnerabilities found',
+              body,
+              labels: ['dependency-audit', 'security']
+            });

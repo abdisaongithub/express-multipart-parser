@@ -17,11 +17,12 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "jest --config jest.config.js",
-    "test:watch": "jest --watch",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
     "start": "ts-node example.ts",
     "dev": "ts-node-dev --clear --transpile-only --respawn --ignore-watch node_modules example.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepare": "husky"
   },
   "repository": {
     "type": "git",
@@ -32,16 +33,15 @@
   "private": false,
   "devDependencies": {
     "@types/express": "^4.17.23",
-    "@types/jest": "^30.0.0",
     "@types/node": "^20.5.1",
     "@types/supertest": "^2.0.12",
     "express": "^4.18.2",
-    "jest": "^30.3.0",
+    "husky": "^9.1.7",
     "supertest": "^6.3.3",
-    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.1",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.1.6"
+    "typescript": "^5.1.6",
+    "vitest": "^4.1.8"
   },
   "files": [
     "dist"
